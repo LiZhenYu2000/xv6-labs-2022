@@ -1,0 +1,6 @@
+1. It is function usertrap() which called function syscall().
+2. The value of p->trapframe->a7 is 0x7, which means that the syscall about to run is exec().
+3. The CPU was in User Mode.
+4. 'lw a3 0(zero)' is the instruction the kernel is panicing at, and a3 is corresponding to 'num'.
+5. Address 0 is not mapped in the kernel address space, and the value of register 'scause' indicates that the reason for the kernel trap is not an interrupt but a 'Load Page Fault'.
+6. The name of the binary that was running when the kernel paniced is 'initcode' whose pid is 1.
