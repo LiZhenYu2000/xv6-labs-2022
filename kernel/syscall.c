@@ -80,6 +80,7 @@ argstr(int n, char *buf, int max)
 }
 
 // Prototypes for the functions that handle system calls.
+extern uint64 sys_sysinfo(void);
 extern uint64 sys_trace(void);
 extern uint64 sys_fork(void);
 extern uint64 sys_exit(void);
@@ -128,6 +129,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_sysinfo] sys_sysinfo,
 };
 
 static const char* sysnames[] = {
@@ -153,6 +155,7 @@ static const char* sysnames[] = {
 [SYS_mkdir]   "mkdir",
 [SYS_close]   "close",
 [SYS_trace]   "trace",
+[SYS_sysinfo] "sysinfo",
 };
 
 void

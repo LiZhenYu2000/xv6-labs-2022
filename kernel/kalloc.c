@@ -30,6 +30,18 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
+uint64
+kcnt()
+{
+  uint64 cnt = 0;
+  struct run *tmp = kmem.freelist;
+  while(tmp && (uint64)tmp < PHYSTOP) {
+  	cnt += PGSIZE;
+	tmp = tmp -> next;
+  }
+  return cnt;
+}
+
 void
 freerange(void *pa_start, void *pa_end)
 {
