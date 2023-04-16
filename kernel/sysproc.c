@@ -75,6 +75,42 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 uaddr;
+  uint64 vaddr, daddr;
+  int cnt, idx = 0;
+  unsigned int bitmask = 0;
+
+  argaddr(0, &vaddr);
+  argint(1, &cnt);
+  argaddr(2, &uaddr);
+
+  // printf("============PAGE TABLE==========\n");
+  // vmprint(myproc()->pagetable, 2);
+  // printf("================================\n");
+
+  // Set the limit of the number of pages that can be scanned to sizeof(unsigned int) * 8.
+  if(cnt > sizeof(unsigned int) * 8){
+    panic("pgaccess1");
+  }
+
+  daddr = PGROUNDUP(vaddr+cnt*PGSIZE-1);
+  vaddr = PGROUNDDOWN(vaddr);
+  for(uint64 i = vaddr; i < daddr; i += PGSIZE, ++ idx){
+    pte_t *pte = walk(myproc()->pagetable, i, 0);
+
+    // If the virtual address is not mapped, panic.
+    if(!pte)
+      panic("pgaccess2");
+
+    if(*pte & PTE_A){
+      *pte ^= PTE_A;
+      bitmask |= (1 << idx);
+    }
+  }
+
+  if(copyout(myproc()->pagetable, uaddr, (char*)&bitmask, sizeof(bitmask)) < 0)
+    panic("paaccess3");
+
   return 0;
 }
 #endif

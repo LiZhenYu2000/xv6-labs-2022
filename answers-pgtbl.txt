@@ -1,0 +1,6 @@
+1. The fork() system call could be made faster by mapping parent and son process with the same
+   pages until one of them trying to change these pages.
+2. Page 0 contains the .text segment of the process; Page 2 is actually a guard page which can
+   not access in user mode; Yes, we can read/write the memory mapped by Page 1 cause its PTE_R
+   , PTE_W and PTE_U bits are set; The third to last page contains struct usyscall which we mapped 
+   to user address space to speed up the syscall.
