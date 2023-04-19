@@ -93,9 +93,9 @@ sys_pgaccess(void)
     panic("pgaccess1");
   }
 
-  daddr = PGROUNDUP(vaddr+cnt*PGSIZE-1);
+  daddr = PGROUNDDOWN(vaddr+cnt*PGSIZE-1);
   vaddr = PGROUNDDOWN(vaddr);
-  for(uint64 i = vaddr; i < daddr; i += PGSIZE, ++ idx){
+  for(uint64 i = vaddr; i <= daddr; i += PGSIZE, ++ idx){
     pte_t *pte = walk(myproc()->pagetable, i, 0);
 
     // If the virtual address is not mapped, panic.
