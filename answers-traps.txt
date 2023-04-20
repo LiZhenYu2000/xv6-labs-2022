@@ -1,0 +1,8 @@
+1. Register a2 holds the argument 13 in main's call to printf().
+2. The call to function f is located in line 0x26 whose return value has been calculated during
+   compiling, and the call to g is located in line 0x14 which is inlined by the compiler.
+3. The function printf is located in line 0x64a.
+4. The value in register ra should be 0x38 which is the current PC + 4.
+5. The output is "HE110 World", and if the RISC-V is big-endian the value of i should be set to
+   0x726c6400 in order to yield the same output, and there is no need to change 57616.
+6. Number 1 is printed after 'y=' and it should be the value left in the a2 register.
