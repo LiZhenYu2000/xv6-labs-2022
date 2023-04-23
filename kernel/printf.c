@@ -123,8 +123,23 @@ panic(char *s)
   printf(s);
   printf("\n");
   panicked = 1; // freeze uart output from other CPUs
+  backtrace();
   for(;;)
     ;
+}
+
+void
+backtrace(void)
+{
+  uint64 cur = r_fp();
+  uint64 end = PGROUNDDOWN(cur);
+  printf("backtrace:\n");
+  while(cur >= end && cur < end + PGSIZE) {
+    // Print the address of the instruction which called the function.
+    printf("%p\n", *(uint64*)(cur - 8)); // Read ra.
+    cur = *(uint64*)(cur - 16); // Read fp.
+  }
+  return;
 }
 
 void
