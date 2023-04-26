@@ -132,6 +132,13 @@ found:
     return 0;
   }
 
+  // Allocate a htrapframe page.
+  if((p->htrapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -146,6 +153,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  // Initialize the proc's fields for sigalarm and sigreturn.
+  p->interval = 0;
+  p->handler = 0;
+  p->tpassed = 0;
+  p->reentrant = 0;
+
   return p;
 }
 
@@ -158,8 +171,15 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->htrapframe)
+    kfree((void*)p->htrapframe);
+  p->htrapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  p->reentrant = 0;
+  p->handler = 0;
+  p->interval = 0;
+  p->tpassed = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -298,6 +318,15 @@ fork(void)
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
+
+  // copy saved user registers for handler.
+  *(np->htrapframe) = *(p->htrapframe);
+
+  // copy timeintr handler and relative datas.
+  np->handler = p->handler;
+  np->interval = p->interval;
+  np->tpassed = p->tpassed;
+  np->reentrant = p->reentrant;
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;

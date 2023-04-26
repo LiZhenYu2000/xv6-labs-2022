@@ -1,6 +1,8 @@
 struct stat;
 
 // system calls
+int sigalarm(int ticks, void (*handler)());
+int sigreturn(void);
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);

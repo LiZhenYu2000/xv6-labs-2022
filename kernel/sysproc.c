@@ -7,6 +7,37 @@
 #include "proc.h"
 
 uint64
+sys_sigalarm(void)
+{
+  int interval;
+  uint64 handler;
+
+  argint(0, &interval);
+  argaddr(1, &handler);
+
+  struct proc *p = myproc();
+  if(!(p->reentrant) && interval) {
+    p->interval = interval;
+    p->handler = handler;
+    p->tpassed = 0;
+  } else if(p->reentrant)
+    return -1;
+
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  *(p->trapframe) = *(p->htrapframe);
+  p->reentrant = 0;
+  // Restore the register a0, otherwise the value of a0 will be the return
+  // value of the sigreturn.
+  return p->trapframe->a0;
+}
+
+uint64
 sys_exit(void)
 {
   int n;

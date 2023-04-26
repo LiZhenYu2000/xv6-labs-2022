@@ -85,6 +85,13 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct proc {
   struct spinlock lock;
 
+  int tpassed;
+  int interval;
+  int reentrant;	       // Indicate whether the process has return from the previously called
+			       // handler function.
+  uint64 handler;
+  struct trapframe *htrapframe;// Saved process's user program counter.
+
   // p->lock must be held when using these:
   enum procstate state;        // Process state
   void *chan;                  // If non-zero, sleeping on chan

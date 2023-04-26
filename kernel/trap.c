@@ -76,6 +76,24 @@ usertrap(void)
   if(killed(p))
     exit(-1);
 
+  if(which_dev == 2) {
+    // Don't do anything if interval is zero.
+    if(p->interval) {
+      p->tpassed += 1;
+      if(p->tpassed == p->interval) {
+	 // Be sure that process has already returned from the last
+	 // alarm function call, otherwise simply reset the passed
+	 // ticks.
+	 if(!p->reentrant) {
+	   *(p->htrapframe) = *(p->trapframe);
+	   p->trapframe->epc = p->handler;
+	   p->reentrant = 1;
+	 }
+	 p->tpassed = 0;
+      }
+    }
+  }
+
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
