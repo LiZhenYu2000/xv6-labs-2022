@@ -8,6 +8,8 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#define MXPGS ((PGROUNDDOWN((uint64)PHYSTOP) - PGROUNDUP((uint64)KERNBASE)) / PGSIZE)
+#define PHYID(pa) ((PGROUNDDOWN((uint64)pa) - PGROUNDUP((uint64)KERNBASE)) / PGSIZE)
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -20,12 +22,14 @@ struct run {
 
 struct {
   struct spinlock lock;
+  int ref[MXPGS];
   struct run *freelist;
 } kmem;
 
 void
 kinit()
 {
+  memset(kmem.ref, -1, sizeof(kmem.ref));
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
@@ -37,6 +41,17 @@ freerange(void *pa_start, void *pa_end)
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
+}
+
+// Increase the ref of a physical page pointed at by pa.
+void
+kref(void *pa)
+{
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("kref");
+  acquire(&kmem.lock);
+  kmem.ref[PHYID(pa)] ++;
+  release(&kmem.lock);
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -51,12 +66,26 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  if(kmem.ref[PHYID(pa)] == 0)
+    panic("kfree ref0");
+
+  acquire(&kmem.lock);
+  if(kmem.ref[PHYID(pa)] == -1)
+    kmem.ref[PHYID(pa)] = 1;
+  else if(kmem.ref[PHYID(pa)] > 1){
+    kmem.ref[PHYID(pa)] --;
+    release(&kmem.lock);
+    return;
+  }
+  release(&kmem.lock);
+
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
+  kmem.ref[PHYID(r)] --;
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
@@ -72,8 +101,10 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    kmem.ref[PHYID(r)] ++;
+  }
   release(&kmem.lock);
 
   if(r)

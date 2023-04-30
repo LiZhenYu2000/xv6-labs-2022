@@ -16,6 +16,8 @@ void kernelvec();
 
 extern int devintr();
 
+int cowtrap(uint64);
+
 void
 trapinit(void)
 {
@@ -46,7 +48,7 @@ usertrap(void)
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
-  
+
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
@@ -65,6 +67,13 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if(r_scause() == 15){
+    // Wirte to COW pages.
+    if(killed(p))
+      exit(-1);
+
+    if(cowtrap(r_stval()) != 0)
+      setkilled(p);
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
@@ -218,4 +227,34 @@ devintr()
     return 0;
   }
 }
+int
+cowtrap(uint64 va)
+{
+  struct proc *p = myproc();
+  char *pa;
+  if(va >= MAXVA)
+    goto err;
+  pte_t *pte = walk(p->pagetable, va, 0);
 
+  if(pte == 0)
+    goto err;
+
+  if(*pte & PTE_COW) {
+    if((pa = kalloc()) == 0)
+      goto err;
+
+    memmove(pa, (char*)PTE2PA(*pte), PGSIZE);
+    uint flags = PTE_FLAGS(*pte);
+    flags ^= PTE_COW;
+    flags |= PTE_W;
+
+    uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 1);
+    if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)pa, flags) != 0)
+      goto err;
+
+    return 0;
+  }
+
+ err:
+  return -1;
+}

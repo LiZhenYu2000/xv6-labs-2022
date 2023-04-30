@@ -306,28 +306,32 @@ int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
   pte_t *pte;
-  uint64 pa, i;
-  uint flags;
-  char *mem;
+  uint64 i;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
+    // Set the PTE_COW bit and reset the PTE_W bit if the parent PTE_W bit has set before.
+    if(*pte & PTE_W){
+      *pte ^= PTE_W;
+      *pte |= PTE_COW;
+    }
+    kref((void*)PTE2PA(*pte));
+    if(mappages(new, i, PGSIZE, PTE2PA(*pte), PTE_FLAGS(*pte)) != 0){
+      kfree((void*)PTE2PA(*pte));
       goto err;
     }
   }
   return 0;
 
  err:
+  // Restore the previous pte flags of the parent process.
+  if(*pte & PTE_COW){
+    *pte |= PTE_W;
+    *pte ^= PTE_COW;
+  }
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
@@ -352,10 +356,34 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+  uint flags;
+  pte_t *pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
+    if(va0 >= MAXVA)
+      return -1;
+    pte = walk(pagetable, va0, 0);
+
+    if(pte == 0){
+      return -1;
+    } else if(*pte & PTE_COW){
+      if((pa0 = (uint64)kalloc()) == 0)
+        return -1;
+
+      memmove((char*)pa0, (char*)PTE2PA(*pte), PGSIZE);
+      flags = PTE_FLAGS(*pte);
+      flags ^= PTE_COW;
+      flags |= PTE_W;
+
+      uvmunmap(pagetable, va0, 1, 1);
+      if(mappages(pagetable, va0, PGSIZE, pa0, flags) != 0)
+        return -1;
+
+    } else {
+      pa0 = PTE2PA(*pte);
+    }
+
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
