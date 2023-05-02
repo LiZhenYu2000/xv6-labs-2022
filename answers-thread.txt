@@ -1,0 +1,10 @@
+1. There will be race conditions on HashTable Entries. Incase two thread execute function insert()
+   concurrently if one thread break the invariant of the HashTable Entry and the other thread
+   update the Entries at that time, the data structure will be messed up which leads to the
+   missing of the keys.
+2. thread 1: Read Table[i]; ->
+   thread 2: Read Table[i]; ->
+   thread 1: e->next = Table[i]; ->
+   thread 2: e->next = Table[i]; ->
+   thread 1: *p = e; ->
+   thread 2: *p = e; (the key inserted by thread 1 is missed.)
