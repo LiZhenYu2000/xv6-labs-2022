@@ -102,8 +102,38 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  
+  acquire(&e1000_lock);
+
+  uint32 tail = regs[E1000_TDT];
+  if(tail >= TX_RING_SIZE) {
+    release(&e1000_lock);
+    goto err;
+  }
+
+  struct tx_desc *desc = tx_ring + tail;
+  if((desc->status & E1000_TXD_STAT_DD) == 0) {
+    // E1000 hasn't finished transmiting the previous package.
+    release(&e1000_lock);
+    goto err;
+  }
+
+  if(tx_mbufs[tail])
+    mbuffree(tx_mbufs[tail]);
+
+  desc->addr = (uint64)m->head;
+  desc->length = m->len;
+  desc->cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
+  tx_mbufs[tail] = m;
+  regs[E1000_TDT] = (tail + 1) % TX_RING_SIZE;
+  // Make sure that the instructions above all done before release the lock.
+  __sync_synchronize();
+
+  release(&e1000_lock);
+
   return 0;
+
+ err:
+  return -1;
 }
 
 static void
@@ -115,6 +145,34 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+  acquire(&e1000_lock);
+
+  while(1) {
+    uint32 tail = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+    struct rx_desc *desc = rx_ring + tail;
+    if((desc->status & E1000_RXD_STAT_DD) == 0) {
+      // E1000 hasn't finished receiving the previous package.
+      break;
+    }
+
+    struct mbuf *m = rx_mbufs[tail];
+    mbufput(m, desc->length);
+
+    release(&e1000_lock);
+    // Hand the package to the upper level net stack to handle.
+    net_rx(m);
+    acquire(&e1000_lock);
+
+    m = mbufalloc(0);
+    rx_mbufs[tail] = m;
+    desc->addr = (uint64)m->head;
+    desc->status = 0;
+    regs[E1000_RDT] = tail;
+    // Make sure every instruction in previous loop has done before got into next loop.
+    __sync_synchronize();
+  }
+
+  release(&e1000_lock);
 }
 
 void
