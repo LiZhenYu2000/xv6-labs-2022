@@ -9,3 +9,4 @@
 - Lab5 Copy on-write [cow](https://github.com/LiZhenYu2000/xv6-labs-2022/tree/cow)
 - Lab6 Multithreading [thread](https://github.com/LiZhenYu2000/xv6-labs-2022/tree/thread)
 - Lab7 Network driver [net](https://github.com/LiZhenYu2000/xv6-labs-2022/tree/net)
+- Lab8 Lock [lock](https://github.com/LiZhenYu2000/xv6-labs-2022/tree/lock)
