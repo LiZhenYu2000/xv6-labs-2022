@@ -21,12 +21,17 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+} kmem[NCPU];
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  char name[10];
+  for(int i = 0; i < NCPU; ++ i) {
+    snprintf(name, sizeof(name), "kmem%d", i);
+    initlock(&kmem[i].lock, name);
+  }
+  // Give all the free memory to the CPU which calls kinit().
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -39,6 +44,29 @@ freerange(void *pa_start, void *pa_end)
     kfree(p);
 }
 
+static
+struct run *
+ksteal(int id)
+{
+  struct run *ans = 0;
+
+  // Scan each cpu for freememory except for the cpu which called ksteal.
+  // And also can make load balanced among all the CPU.
+  for(int _ = 0; _ < NCPU - 1; ++ _) {
+    id = (id - 1 + NCPU) % NCPU;
+    acquire(&kmem[id].lock);
+    if(kmem[id].freelist) {
+    	ans = kmem[id].freelist;
+	kmem[id].freelist = kmem[id].freelist->next;
+    }
+    release(&kmem[id].lock);
+    if(ans)
+      break;
+  }
+
+  return ans;
+}
+
 // Free the page of physical memory pointed at by pa,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
@@ -48,6 +76,11 @@ kfree(void *pa)
 {
   struct run *r;
 
+  // Turn off interupt to make the call to cpuid() safe.
+  push_off();
+  int id = cpuid();
+  pop_off();
+
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
@@ -56,10 +89,10 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  acquire(&kmem[id].lock);
+  r->next = kmem[id].freelist;
+  kmem[id].freelist = r;
+  release(&kmem[id].lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -70,12 +103,21 @@ kalloc(void)
 {
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+  push_off();
+  int id = cpuid();
+  pop_off();
 
+  acquire(&kmem[id].lock);
+  r = kmem[id].freelist;
+  if(r) {
+    kmem[id].freelist = r->next;
+    release(&kmem[id].lock);
+  }
+  else {
+    // Release the lock of current cpu before call ksteal() to avoid deadlock.
+    release(&kmem[id].lock);
+    r = ksteal(id);
+  }
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
