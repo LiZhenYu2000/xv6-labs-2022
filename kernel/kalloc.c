@@ -79,7 +79,6 @@ kfree(void *pa)
   // Turn off interupt to make the call to cpuid() safe.
   push_off();
   int id = cpuid();
-  pop_off();
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
@@ -93,6 +92,9 @@ kfree(void *pa)
   r->next = kmem[id].freelist;
   kmem[id].freelist = r;
   release(&kmem[id].lock);
+
+  // Turn on interupt after finishing using cpuid.
+  pop_off();
 }
 
 // Allocate one 4096-byte page of physical memory.
