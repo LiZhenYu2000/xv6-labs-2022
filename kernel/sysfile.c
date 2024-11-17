@@ -256,7 +256,7 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE || ip->type == T_SYMLINK))
       return ip;
     iunlockput(ip);
     return 0;
@@ -301,13 +301,52 @@ create(char *path, short type, short major, short minor)
   return 0;
 }
 
+// Return inode to which iSymlink actually reference,
+// if found one return the locked inode, otherwise return NULL and
+// make sure no other inode has been locked.
+static struct inode*
+drefsymlink(struct inode *iSymlink, int mxRefDepth)
+{
+	char midPath[MAXPATH];
+	struct inode *tmp = 0;
+
+	if(!iSymlink || mxRefDepth <= 0){
+		iunlockput(iSymlink);
+		return 0;
+	}
+
+	if(iSymlink->type != T_SYMLINK){
+		return iSymlink;
+	}
+
+	if(readi(iSymlink, 0, (uint64)midPath, 0, sizeof(midPath)) != sizeof(midPath)){
+		iunlockput(iSymlink);
+		return 0;
+	}
+
+	if((tmp = namei(midPath)) == 0){
+		iunlockput(iSymlink);
+		return 0;
+	}
+
+	iunlockput(iSymlink);
+	ilock(tmp);
+	iSymlink = drefsymlink(tmp, mxRefDepth - 1);
+
+	return iSymlink;
+}
+
 uint64
 sys_open(void)
 {
+	#define MAX_DEPTH 10
+
   char path[MAXPATH];
   int fd, omode;
   struct file *f;
   struct inode *ip;
+	// The inode to which the symbol link actually reference
+	struct inode *ipRef = 0;
   int n;
 
   argint(1, &omode);
@@ -341,6 +380,17 @@ sys_open(void)
     return -1;
   }
 
+	if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+		if((ipRef = drefsymlink(ip, MAX_DEPTH)) == 0){
+			end_op();
+			return -1;
+		}
+	}
+
+	if(ipRef){
+		ip = ipRef;
+	}
+
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
       fileclose(f);
@@ -356,7 +406,8 @@ sys_open(void)
     f->type = FD_INODE;
     f->off = 0;
   }
-  f->ip = ip;
+
+	f->ip = ip;
   f->readable = !(omode & O_WRONLY);
   f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
 
@@ -368,6 +419,8 @@ sys_open(void)
   end_op();
 
   return fd;
+
+	#undef MAX_DEPTH
 }
 
 uint64
@@ -501,5 +554,35 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_symlink(void)
+{
+  char pathSymlink[MAXPATH], pathLinkTo[MAXPATH];
+	struct inode *iSymlink;
+
+  if(argstr(0, pathLinkTo, MAXPATH) < 0 || argstr(1, pathSymlink, MAXPATH) < 0){
+    return -1;
+  }
+
+	begin_op();
+
+	// Return locked iSymlink
+  if((iSymlink = create(pathSymlink, T_SYMLINK, 0, 0)) == 0){
+		end_op();
+		return -1;
+	}
+
+	// Write linked path to symbol link inode
+	if(writei(iSymlink, 0, (uint64)pathLinkTo, 0, sizeof(pathLinkTo)) != sizeof(pathLinkTo)) {
+		end_op();
+		return -1;
+	}
+
+	iunlockput(iSymlink);
+	end_op();
+
   return 0;
 }
