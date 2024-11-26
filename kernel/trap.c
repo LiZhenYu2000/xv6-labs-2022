@@ -16,6 +16,8 @@ void kernelvec();
 
 extern int devintr();
 
+extern int mmapintr();
+
 void
 trapinit(void)
 {
@@ -65,7 +67,12 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  } else if(r_scause() == 0x0d || r_scause() == 0x0f){
+		uint64 va = r_stval();
+
+		if(mmapintr(va) != 0)
+			setkilled(p);
+	} else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
@@ -158,6 +165,14 @@ kerneltrap()
   // so restore trap registers for use by kernelvec.S's sepc instruction.
   w_sepc(sepc);
   w_sstatus(sstatus);
+}
+
+int
+mmapintr(uint64 va)
+{
+  struct proc *p = myproc();
+
+	return vma_load(p, va);
 }
 
 void

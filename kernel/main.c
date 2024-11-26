@@ -16,6 +16,7 @@ main()
     printf("\n");
     printf("xv6 kernel is booting\n");
     printf("\n");
+		vma_init();			 // VMA list
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging

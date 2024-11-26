@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct vma;
 
 // bio.c
 void            binit(void);
@@ -89,6 +90,7 @@ int             growproc(int);
 void            proc_mapstacks(pagetable_t);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
+void						proc_freevma(pagetable_t, struct vma *);
 int             kill(int);
 int             killed(struct proc*);
 void            setkilled(struct proc*);
@@ -184,6 +186,19 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
+
+// vma.c
+struct vma *		vma_alloc(void);
+struct vma *		vma_free(struct vma *);
+void            vma_init(void);
+int							vma_load(struct proc *, uint64 va);
+int							vma_copy(struct proc *, struct proc *);
+int							vma_unload(pagetable_t, uint64, struct vma *);
+struct vma *		vma_unmap(pagetable_t, struct vma *, struct vma *);
+struct vma *		vma_map(pagetable_t, struct vma *, struct vma *);
+void *					mmap(void *, size_t, int, int, struct file *, uint64);
+void						munmap(void *, size_t);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

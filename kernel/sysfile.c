@@ -503,3 +503,49 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{
+	void *addr = 0;
+	size_t length = 0;
+	int prot = 0;
+	int flags = 0;
+	struct file *f = 0;
+	struct file *nf = 0;
+	uint64 offset = 0;
+
+	argaddr(0, (uint64*)&addr);
+	argaddr(1, (uint64*)&length);
+	argint(2, &prot);
+	argint(3, &flags);
+
+	if(argfd(4, 0, &f) < 0)
+		return -1;
+	begin_op();
+  nf = filedup(f);
+	end_op();
+
+	if(((prot & PROT_READ) && !f->readable)
+		|| (((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable)))
+		return -1;
+
+	argaddr(5, &offset);
+
+	uint64 res = (uint64)mmap(addr, length, prot, flags, nf, offset);
+	return res;
+}
+
+uint64
+sys_munmap(void)
+{
+	void *addr = 0;
+	size_t length = 0;
+
+	argaddr(0, (uint64*)&addr);
+	argaddr(1, (uint64*)&length);
+
+	munmap(addr, length);
+
+	return 0;
+}

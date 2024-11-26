@@ -150,6 +150,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
+
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
@@ -230,6 +231,9 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 
   if(newsz < oldsz)
     return oldsz;
+
+	if(newsz >= MMAPFRAME)
+		panic("uvmalloc: touch mmap");
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){

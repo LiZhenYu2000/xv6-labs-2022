@@ -59,6 +59,11 @@ OBJS += \
 	$K/pci.o
 endif
 
+ifeq ($(LAB),mmap)
+OBJS += \
+	$K/vma.o
+endif
+
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -211,6 +216,11 @@ endif
 ifeq ($(LAB),cow)
 UPROGS += \
 	$U/_cowtest
+endif
+
+ifeq ($(LAB),mmap)
+UPROGS += \
+	$U/_mmaptest
 endif
 
 ifeq ($(LAB),thread)

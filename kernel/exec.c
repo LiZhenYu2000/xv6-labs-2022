@@ -120,6 +120,11 @@ exec(char *path, char **argv)
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
     
+	// Unmap all mapped VMA.
+	if(p->pVMA)
+		proc_freevma(p->pagetable, p->pVMA);
+	p->pVMA = 0;
+
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;

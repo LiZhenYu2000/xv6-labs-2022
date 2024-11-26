@@ -55,6 +55,7 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      p->pVMA = 0;
   }
 }
 
@@ -205,6 +206,14 @@ proc_pagetable(struct proc *p)
   return pagetable;
 }
 
+void
+proc_freevma(pagetable_t pagetable, struct vma *pVMA)
+{
+	while(pVMA){
+		pVMA = vma_unmap(pagetable, pVMA, pVMA);
+	}
+}
+
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
@@ -310,6 +319,10 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+	// Copy VMAs to child proc.
+	if(vma_copy(p, np) != 0)
+		return -1;
+
   pid = np->pid;
 
   release(&np->lock);
@@ -359,6 +372,11 @@ exit(int status)
       p->ofile[fd] = 0;
     }
   }
+
+	// Unmap all mapped VMA.
+	if(p->pVMA)
+		proc_freevma(p->pagetable, p->pVMA);
+	p->pVMA = 0;
 
   begin_op();
   iput(p->cwd);
